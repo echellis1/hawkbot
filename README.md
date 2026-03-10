@@ -147,3 +147,60 @@ the Excel spreadsheet I compiled with the data that underpins this crate in
 Given that this protocol is technically proprietary, please note that this crate
 does not come with any warranty. For more details,
 [see the license](./LICENSE.md).
+
+## Hawkbot Web UI (vendored)
+
+This repository now includes a vendored UI app at `web-ui/`. The current
+integration model keeps Rust and UI as separate services:
+
+- This crate remains backend/library-focused.
+- `web-ui/` is a standalone static app for local development and deployment.
+- The UI calls a separately-running Hawkbot-compatible API runtime.
+
+### UI ownership, pinning, and update strategy
+
+- **Code owner**: Hawkbot maintainers owning this repository are responsible for
+  updating `web-ui/`.
+- **Pinning policy**: The vendored UI is pinned to the exact commit currently
+  committed in this repository; updates are explicit via pull request.
+- **Sync strategy**:
+  1. Pull updates from `https://github.com/echellis1/hawkbot-gateway` into a
+     temporary working directory.
+  2. Replace `web-ui/` contents in this repository.
+  3. Run local checks (`make ui-lint`, `make ui-typecheck`, `make ui-build`).
+  4. Submit as a dedicated PR that references the upstream commit SHA/version.
+
+> Note: `web-ui/` is intentionally vendored (no submodule/subtree linkage), so
+> updates are fully controlled and reviewable in this repo.
+
+### Root developer scripts
+
+Use the root `Makefile` targets:
+
+- `make ui-install` – install UI dependencies in `web-ui/`.
+- `make ui-dev` – run the UI development server.
+- `make ui-lint` – run UI lint checks.
+- `make ui-typecheck` – run UI type checks.
+- `make ui-build` – build production UI assets.
+
+### Local quickstart (two-service setup)
+
+1. **Backend/API runtime**: start your Hawkbot-compatible API service
+   separately (default assumed URL: `http://localhost:8080`).
+2. **UI**:
+   ```sh
+   make ui-install
+   HAWKBOT_UI_API_BASE_URL=http://localhost:8080 make ui-dev
+   ```
+3. Open `http://localhost:5173`.
+
+### Production packaging notes
+
+- **Build output**: static assets are emitted to `web-ui/dist/` via
+  `make ui-build`.
+- **Artifact policy**: `web-ui/dist/` artifacts are built at deploy time and are
+  not required to be committed.
+- **Required UI environment variables**:
+  - `HAWKBOT_UI_API_BASE_URL` (optional, defaults to `http://localhost:8080`):
+    API base URL baked into `dist/config.js` at build time and injected by the
+    dev server.

@@ -10,7 +10,8 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  rust-checks:
+    name: Rust checks
     runs-on: ubuntu-latest
 
     steps:
@@ -21,3 +22,27 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/master' }}
       - name: Check
         run: cargo check --verbose
+
+  ui-checks:
+    name: UI checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web-ui/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+        working-directory: web-ui
+      - name: Lint
+        run: npm run lint
+        working-directory: web-ui
+      - name: Type check
+        run: npm run typecheck
+        working-directory: web-ui
+      - name: Build
+        run: npm run build
+        working-directory: web-ui

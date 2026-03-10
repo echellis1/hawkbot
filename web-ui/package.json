@@ -1,0 +1,12 @@
+{
+  "name": "hawkbot-web-ui",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Vendored Hawkbot UI",
+  "scripts": {
+    "dev": "node scripts/dev-server.mjs",
+    "build": "node scripts/build.mjs",
+    "lint": "node scripts/lint.mjs",
+    "typecheck": "node --check src/app.js"
+  }
+}

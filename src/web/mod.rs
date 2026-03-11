@@ -3,18 +3,18 @@ use std::{
     io,
     path::PathBuf,
     sync::Arc,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime},
 };
 
 use serde::Deserialize;
-use uuid::Uuid;
-use serde_json::Value;
+use serde_json::{Map, Value};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
     sync::RwLock,
 };
 use tokio_serial::SerialPortBuilderExt;
+use uuid::Uuid;
 
 use crate::{
     config::AppConfig,
@@ -33,7 +33,7 @@ struct RuntimeStatus {
     last_update: Option<String>,
     parser_status: String,
     controller_connection_state: String,
-    latest_payload: Option<BTreeMap<String, String>>,
+    latest_payload: Option<Value>,
 }
 
 impl Default for RuntimeStatus {
@@ -121,10 +121,14 @@ async fn poll_loop(state: WebState) {
 
             match parser.update_and_snapshot().await {
                 Ok(Some(mut payload)) => {
-                    payload.insert("sport".into(), cfg.active_sport.as_str().into());
-                    payload.insert("controller".into(), "daktronics".into());
-                    payload.insert("updated_at".into(), now_ts());
-                    payload.insert("public_id".into(), cfg.public_status_uuid.clone());
+                    if cfg.active_sport != ActiveSport::Basketball {
+                        if let Value::Object(ref mut obj) = payload {
+                            obj.insert("sport".into(), cfg.active_sport.as_str().into());
+                            obj.insert("controller".into(), "daktronics".into());
+                            obj.insert("updated_at".into(), now_ts().into());
+                            obj.insert("public_id".into(), cfg.public_status_uuid.clone().into());
+                        }
+                    }
 
                     let mut runtime = state.runtime.write().await;
                     runtime.last_update = Some(now_ts());
@@ -175,7 +179,7 @@ impl DaktronicsParser {
 
     async fn update_and_snapshot(
         &mut self,
-    ) -> Result<Option<BTreeMap<String, String>>, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<Option<Value>, Box<dyn std::error::Error + Send + Sync>> {
         let changed = match self {
             Self::Baseball(s) => s.rtd_state().update_async().await?,
             Self::Basketball(s) => s.rtd_state().update_async().await?,
@@ -190,33 +194,134 @@ impl DaktronicsParser {
         }
 
         let value = match self {
-            Self::Baseball(s) => serde_json::to_value(s)?,
-            Self::Basketball(s) => serde_json::to_value(s)?,
-            Self::Football(s) => serde_json::to_value(s)?,
-            Self::Soccer(s) => serde_json::to_value(s)?,
-            Self::Volleyball(s) => serde_json::to_value(s)?,
-            Self::Wrestling(s) => serde_json::to_value(s)?,
-            Self::WaterPolo(s) => serde_json::to_value(s)?,
+            Self::Baseball(s) => flatten(serde_json::to_value(s)?),
+            Self::Basketball(s) => basketball_public_payload(s),
+            Self::Football(s) => flatten(serde_json::to_value(s)?),
+            Self::Soccer(s) => flatten(serde_json::to_value(s)?),
+            Self::Volleyball(s) => flatten(serde_json::to_value(s)?),
+            Self::Wrestling(s) => flatten(serde_json::to_value(s)?),
+            Self::WaterPolo(s) => flatten(serde_json::to_value(s)?),
         };
-        Ok(Some(flatten(value)))
+        Ok(Some(value))
     }
 }
 
-fn flatten(value: Value) -> BTreeMap<String, String> {
-    let mut out = BTreeMap::new();
+fn flatten(value: Value) -> Value {
+    let mut out = Map::new();
     if let Value::Object(obj) = value {
         for (k, v) in obj {
-            out.insert(
-                to_snake_case(&k),
-                match v {
-                    Value::Null => String::new(),
-                    Value::String(s) => s,
-                    _ => v.to_string(),
-                },
-            );
+            out.insert(to_snake_case(&k), v);
         }
     }
-    out
+    Value::Object(out)
+}
+
+fn basketball_public_payload(s: &BasketballSport<SerialStreamDataSource>) -> Value {
+    let mut out = Map::new();
+
+    macro_rules! insert_opt_str {
+        ($k:literal, $v:expr) => {
+            out.insert($k.into(), opt_str($v));
+        };
+    }
+    macro_rules! insert_opt_i32 {
+        ($k:literal, $v:expr) => {
+            out.insert($k.into(), opt_i32($v));
+        };
+    }
+    macro_rules! insert_bool {
+        ($k:literal, $v:expr) => {
+            out.insert($k.into(), Value::Bool($v.unwrap_or(false)));
+        };
+    }
+
+    insert_opt_str!("MainClockTime", s.main_clock_time());
+    insert_opt_str!("MainClockTime2", s.main_clock_time_2());
+    insert_opt_str!("MainClockTimeOutTod", s.main_clock_time_out_tod());
+    insert_opt_str!("MainClockTimeOutTod2", s.main_clock_time_out_tod_2());
+    insert_bool!("MainClockIsZero", s.main_clock_is_zero());
+    insert_bool!("MainClockStopped", s.main_clock_stopped());
+    insert_bool!("MainClockTimeOutHorn", s.main_clock_time_out_horn());
+    insert_bool!("MainClockHorn", s.main_clock_horn());
+    insert_bool!("TimeOutHorn", s.time_out_horn());
+    insert_opt_str!("TimeOutTime", s.time_out_time());
+    insert_opt_str!("TimeOfDay", s.time_of_day());
+    insert_opt_str!("HomeTeamName", s.home_team_name());
+    insert_opt_str!("GuestTeamName", s.guest_team_name());
+    insert_opt_i32!("HomeTeamScore", s.home_team_score());
+    insert_opt_i32!("GuestTeamScore", s.guest_team_score());
+    insert_opt_i32!("HomeTimeOutsLeftFull", s.home_time_outs_left_full());
+    insert_opt_i32!("HomeTimeOutsLeftPartial", s.home_time_outs_left_partial());
+    insert_opt_i32!("HomeTimeOutsLeftTotal", s.home_time_outs_left_total());
+    insert_opt_i32!("GuestTimeOutsLeftFull", s.guest_time_outs_left_full());
+    insert_opt_i32!("GuestTimeOutsLeftPartial", s.guest_time_outs_left_partial());
+    insert_opt_i32!("GuestTimeOutsLeftTotal", s.guest_time_outs_left_total());
+    insert_bool!("HomeTimeOutIndicator", s.home_time_out_indicator());
+    insert_opt_str!("HomeTimeOutText", s.home_time_out_text());
+    insert_bool!("GuestTimeOutIndicator", s.guest_time_out_indicator());
+    insert_opt_str!("GuestTimeOutText", s.guest_time_out_text());
+    insert_opt_i32!("Period", s.period());
+    insert_opt_str!("InternalRelay", s.internal_relay());
+    insert_bool!("AdPanelCaptionPower", s.ad_panel_caption_power());
+    insert_bool!("AdPanelCaptionNum1", s.ad_panel_caption_num1());
+    insert_bool!("AdPanelCaptionNum2", s.ad_panel_caption_num2());
+    insert_opt_str!("ShotClockTime", s.shot_clock_time());
+    insert_bool!("ShotClockHorn", s.shot_clock_horn());
+    insert_bool!("HomePossessionIndicator", s.home_possession_indicator());
+    insert_opt_str!("HomePossessionText", s.home_possession_text());
+    insert_bool!("GuestPossessionIndicator", s.guest_possession_indicator());
+    insert_opt_str!("GuestPossessionText", s.guest_possession_text());
+    insert_bool!("Home1On1BonusIndicator", s.home_1_on_1_bonus_indicator());
+    insert_bool!("Home2ShotBonusIndicator", s.home_2_shot_bonus_indicator());
+    insert_opt_str!("HomeBonusText", s.home_bonus_text());
+    insert_bool!("Guest1On1BonusIndicator", s.guest_1_on_1_bonus_indicator());
+    insert_bool!("Guest2ShotBonusIndicator", s.guest_2_shot_bonus_indicator());
+    insert_opt_str!("GuestBonusText", s.guest_bonus_text());
+    insert_opt_i32!("HomeTeamFouls", s.home_team_fouls());
+    insert_opt_i32!("GuestTeamFouls", s.guest_team_fouls());
+    insert_opt_str!("HomePlayerFoulPoints", s.home_player_foul_points());
+    insert_opt_str!("GuestPlayerFoulPoints", s.guest_player_foul_points());
+    insert_opt_str!("PlayerFoul", s.player_foul());
+    insert_opt_i32!("PlayerFoulPlayer", s.player_foul_player());
+    insert_opt_i32!("PlayerFoulFoul", s.player_foul_foul());
+    insert_opt_str!("PlayerFoulPoints", s.player_foul_points());
+    insert_opt_i32!("HomeScorePeriod1", s.home_score_period_1());
+    insert_opt_i32!("HomeScorePeriod2", s.home_score_period_2());
+    insert_opt_i32!("HomeScorePeriod3", s.home_score_period_3());
+    insert_opt_i32!("HomeScorePeriod4", s.home_score_period_4());
+    insert_opt_i32!("HomeScorePeriod5", s.home_score_period_5());
+    insert_opt_i32!("HomeScorePeriod7", s.home_score_period_7());
+    insert_opt_i32!("HomeScorePeriod8", s.home_score_period_8());
+    insert_opt_i32!("HomeScorePeriod9", s.home_score_period_9());
+    insert_opt_i32!("HomeScoreCurrentPeriod", s.home_score_current_period());
+    insert_opt_i32!("GuestScorePeriod1", s.guest_score_period_1());
+    insert_opt_i32!("GuestScorePeriod2", s.guest_score_period_2());
+    insert_opt_i32!("GuestScorePeriod3", s.guest_score_period_3());
+    insert_opt_i32!("GuestScorePeriod4", s.guest_score_period_4());
+    insert_opt_i32!("GuestScorePeriod5", s.guest_score_period_5());
+    insert_opt_i32!("GuestScorePeriod6", s.guest_score_period_6());
+    insert_opt_i32!("GuestScorePeriod7", s.guest_score_period_7());
+    insert_opt_i32!("GuestScorePeriod8", s.guest_score_period_8());
+    insert_opt_i32!("GuestScorePeriod9", s.guest_score_period_9());
+    out.insert("updated_at".into(), now_ts().into());
+
+    Value::Object(out)
+}
+
+fn opt_str(v: Result<&str, crate::rtd_state::RTDStateFieldError>) -> Value {
+    match v {
+        Ok(x) => Value::String(x.to_string()),
+        Err(crate::rtd_state::RTDStateFieldError::NoData) => Value::Null,
+        Err(_) => Value::Null,
+    }
+}
+
+fn opt_i32(v: Result<i32, crate::rtd_state::RTDStateFieldError>) -> Value {
+    match v {
+        Ok(x) => Value::Number(x.into()),
+        Err(crate::rtd_state::RTDStateFieldError::NoData) => Value::Null,
+        Err(_) => Value::Null,
+    }
 }
 
 fn to_snake_case(s: &str) -> String {

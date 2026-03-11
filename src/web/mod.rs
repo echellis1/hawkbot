@@ -875,7 +875,7 @@ button.btn { font-size: 28px; }
     template.replace("__TOKEN__", token)
 }
 
-fn parse_form(body: &str) -> BTreeMap<String, String> {
+fn parse_form(body: &str) -> std::collections::BTreeMap<String, String> {
     body.split('&')
         .filter_map(|pair| pair.split_once('='))
         .map(|(k, v)| (k.to_string(), v.replace('+', " ")))

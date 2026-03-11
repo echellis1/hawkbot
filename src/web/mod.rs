@@ -466,13 +466,20 @@ async fn route(method: &str, target: &str, req: &str, state: WebState) -> String
         return http_ok("application/json", &body);
     }
 
-    if path.starts_with("/admin") && !authorized(query, &state).await {
-        return http_unauthorized();
+    if path.starts_with("/admin") {
+        if method == "GET" && path == "/admin" && query_token(query).is_none() {
+            return http_ok("text/html", admin_login_html());
+        }
+
+        if !authorized(query, &state).await {
+            return http_unauthorized();
+        }
     }
 
     if method == "GET" && path == "/admin" {
-        let body = "<html><body><h2>Admin</h2><form method='post' action='/admin/controller?token=admin'><input name='controller_type' value='daktronics'/><button>Set Controller</button></form><form method='post' action='/admin/sport?token=admin'><input name='active_sport' value='basketball'/><button>Set Sport</button></form><form method='post' action='/admin/rotate?token=admin'><button>Rotate URL</button></form><a href='/admin/config?token=admin'>View config</a></body></html>";
-        return http_ok("text/html", body);
+        let token = query_token(query).unwrap_or_default();
+        let body = admin_html(token);
+        return http_ok("text/html", &body);
     }
 
     if method == "GET" && path == "/admin/config" {
@@ -515,14 +522,258 @@ async fn route(method: &str, target: &str, req: &str, state: WebState) -> String
 }
 
 async fn authorized(query: &str, state: &WebState) -> bool {
-    let token = query
-        .split('&')
-        .find_map(|x| x.split_once('='))
-        .filter(|(k, _)| *k == "token")
-        .map(|(_, v)| v)
-        .unwrap_or("");
+    let token = query_token(query).unwrap_or("");
     let cfg = state.config.read().await;
     token == cfg.admin_password_hash
+}
+
+fn query_token(query: &str) -> Option<&str> {
+    query
+        .split('&')
+        .filter_map(|x| x.split_once('='))
+        .find_map(|(k, v)| (k == "token").then_some(v))
+}
+
+fn admin_login_html() -> &'static str {
+    r#"<!doctype html>
+<html>
+<head>
+<meta charset='utf-8'/>
+<meta name='viewport' content='width=device-width, initial-scale=1'/>
+<title>Daktronics Gateway Admin Login</title>
+<style>
+:root {
+  --bg: #081a3d;
+  --panel: linear-gradient(180deg, #1b3567 0%, #182f5e 100%);
+  --tile: linear-gradient(180deg, #1a3366 0%, #182f5c 100%);
+  --border: #3b67a8;
+  --text: #deebff;
+  --muted: #9fb8df;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: Inter, Segoe UI, Roboto, Arial, sans-serif;
+  color: var(--text);
+  background: radial-gradient(circle at top left, #13366f 0%, #081a3d 52%, #061632 100%);
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.card {
+  width: min(560px, 100%);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 28px;
+}
+h1 { margin: 0; font-size: 34px; }
+p { color: var(--muted); margin: 8px 0 22px; font-size: 19px; }
+label { display: block; color: var(--muted); font-size: 14px; margin: 0 0 8px; }
+input {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid #456fad;
+  background: #0c1f46;
+  color: #eaf2ff;
+  padding: 12px 14px;
+  font-size: 18px;
+}
+.row { margin-top: 18px; display: flex; gap: 10px; flex-wrap: wrap; }
+.btn {
+  border: 1px solid #4c7ec3;
+  background: linear-gradient(180deg, #3b82d7 0%, #2f6fbf 100%);
+  color: #f1f6ff;
+  border-radius: 12px;
+  padding: 10px 16px;
+  font-size: 16px;
+  text-decoration: none;
+  cursor: pointer;
+}
+</style>
+</head>
+<body>
+  <main class='card'>
+    <h1>Daktronics Gateway Admin</h1>
+    <p>Enter your admin token to open configuration controls.</p>
+    <form method='get' action='/admin'>
+      <label for='token'>Admin Token</label>
+      <input id='token' type='password' name='token' placeholder='••••••••' required />
+      <div class='row'>
+        <button class='btn' type='submit'>Open Admin Panel</button>
+        <a class='btn' href='/'>Back to Dashboard</a>
+      </div>
+    </form>
+  </main>
+</body>
+</html>"#
+}
+
+fn admin_html(token: &str) -> String {
+    let template = r#"<!doctype html>
+<html>
+<head>
+<meta charset='utf-8'/>
+<meta name='viewport' content='width=device-width, initial-scale=1'/>
+<title>Daktronics Gateway Admin</title>
+<style>
+:root {
+  --bg: #081a3d;
+  --panel: linear-gradient(180deg, #1b3567 0%, #182f5e 100%);
+  --tile: linear-gradient(180deg, #1a3366 0%, #182f5c 100%);
+  --border: #3b67a8;
+  --text: #deebff;
+  --muted: #9fb8df;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: Inter, Segoe UI, Roboto, Arial, sans-serif;
+  color: var(--text);
+  background: radial-gradient(circle at top left, #13366f 0%, #081a3d 52%, #061632 100%);
+}
+.shell { max-width: 1160px; margin: 10px auto; padding: 0 8px 12px; }
+.header {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+}
+.title h1 { margin: 0; font-size: 38px; }
+.title p { margin: 6px 0 0; color: var(--muted); font-size: 28px; }
+.btns { display: flex; gap: 10px; flex-wrap: wrap; }
+.btn {
+  border: 1px solid #4c7ec3;
+  background: linear-gradient(180deg, #2f62ab 0%, #2a5796 100%);
+  color: #e8f1ff;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 22px;
+  text-decoration: none;
+  cursor: pointer;
+}
+.grid {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(210px, 1fr));
+  gap: 12px;
+}
+.card {
+  background: var(--tile);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px;
+  min-height: 300px;
+}
+.card h2 { margin: 0; font-size: 36px; }
+.desc { margin: 10px 0 16px; color: var(--muted); font-size: 26px; min-height: 64px; }
+label { display: block; margin: 12px 0 6px; color: var(--muted); font-size: 25px; font-weight: 600; }
+input, select {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid #456fad;
+  background: #0c1f46;
+  color: #eaf2ff;
+  padding: 10px 12px;
+  font-size: 28px;
+}
+.actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+button.btn { font-size: 28px; }
+@media (max-width: 1100px) {
+  .title h1 { font-size: 30px; }
+  .title p, .btn, button.btn, .desc, label, input, select, .card h2 { font-size: 18px; }
+  .grid { grid-template-columns: repeat(2, minmax(220px, 1fr)); }
+  .card { min-height: 0; }
+}
+@media (max-width: 760px) {
+  .header { flex-direction: column; align-items: flex-start; }
+  .grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+  <div class='shell'>
+    <section class='header'>
+      <div class='title'>
+        <h1>Daktronics Gateway Admin</h1>
+        <p>Configuration and simulation controls</p>
+      </div>
+      <div class='btns'>
+        <a class='btn' href='/'>Open Dashboard</a>
+        <a class='btn' href='/admin/config?token=__TOKEN__'>View Status JSON</a>
+      </div>
+    </section>
+
+    <section class='grid'>
+      <article class='card'>
+        <h2>Connection settings</h2>
+        <p class='desc'>Serial feed details for the connected scoreboard stream.</p>
+        <label>Serial Device</label>
+        <input value='/dev/ttyUSB0' readonly />
+      </article>
+
+      <article class='card'>
+        <h2>Sport/controller settings</h2>
+        <p class='desc'>Select decoder profile and active sport family.</p>
+        <form method='post' action='/admin/controller?token=__TOKEN__'>
+          <label for='controller_type'>Controller Type</label>
+          <select id='controller_type' name='controller_type'>
+            <option value='daktronics' selected>all_sport_5000</option>
+          </select>
+          <div class='actions'>
+            <button class='btn' type='submit'>Apply Controller</button>
+          </div>
+        </form>
+        <form method='post' action='/admin/sport?token=__TOKEN__'>
+          <label for='active_sport'>Sport Type</label>
+          <select id='active_sport' name='active_sport'>
+            <option value='baseball'>baseball</option>
+            <option value='basketball' selected>basketball</option>
+            <option value='football'>football</option>
+            <option value='soccer'>soccer</option>
+            <option value='volleyball'>volleyball</option>
+            <option value='wrestling'>wrestling</option>
+            <option value='water_polo'>water_polo</option>
+          </select>
+          <div class='actions'>
+            <button class='btn' type='submit'>Apply Sport</button>
+          </div>
+        </form>
+      </article>
+
+      <article class='card'>
+        <h2>Publish settings</h2>
+        <p class='desc'>Public status URL controls used for outbound updates.</p>
+        <label>Public Status Endpoint</label>
+        <input value='/status/&lt;uuid&gt;.json' readonly />
+        <div class='actions'>
+          <form method='post' action='/admin/rotate?token=__TOKEN__'>
+            <button class='btn' type='submit'>Rotate Public URL</button>
+          </form>
+        </div>
+      </article>
+
+      <article class='card'>
+        <h2>Save configuration</h2>
+        <p class='desc'>Apply changes to active runtime configuration.</p>
+        <div class='actions'>
+          <form method='post' action='/admin/controller?token=__TOKEN__'>
+            <input type='hidden' name='controller_type' value='daktronics' />
+            <button class='btn' type='submit'>Save</button>
+          </form>
+        </div>
+      </article>
+    </section>
+  </div>
+</body>
+</html>"#;
+
+    template.replace("__TOKEN__", token)
 }
 
 fn parse_form(body: &str) -> BTreeMap<String, String> {

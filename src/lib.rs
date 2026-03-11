@@ -17,8 +17,11 @@
 
 #[cfg(feature = "tokio")]
 pub mod codecs;
+pub mod config;
+pub mod controllers;
 pub mod packet;
 pub mod rtd_state;
 pub mod sports;
+pub mod web;
 
 pub use rtd_state::{RTDFieldJustification, RTDState, RTDStateError, RTDStateFieldError};

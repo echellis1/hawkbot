@@ -201,7 +201,70 @@ impl DaktronicsParser {
             Self::Wrestling(s) => flatten(serde_json::to_value(s)?),
             Self::WaterPolo(s) => flatten(serde_json::to_value(s)?),
         };
-        Ok(Some(value))
+        Ok(Some(with_common_public_fields(value)))
+    }
+}
+
+fn with_common_public_fields(mut payload: Value) -> Value {
+    let Value::Object(ref mut out) = payload else {
+        return payload;
+    };
+
+    copy_first(
+        out,
+        "HomeTeamName",
+        &["home_team_name", "home_team", "HomeTeamName"],
+    );
+    copy_first(
+        out,
+        "GuestTeamName",
+        &["guest_team_name", "away_team", "GuestTeamName"],
+    );
+    copy_first(
+        out,
+        "HomeTeamScore",
+        &["home_team_score", "home_score", "HomeTeamScore"],
+    );
+    copy_first(
+        out,
+        "GuestTeamScore",
+        &["guest_team_score", "away_score", "GuestTeamScore"],
+    );
+    copy_first(out, "Period", &["period", "quarter", "Period"]);
+    copy_first(
+        out,
+        "MainClockTime",
+        &["main_clock_time", "clock", "MainClockTime"],
+    );
+    copy_first(
+        out,
+        "HomeTimeOutsLeftTotal",
+        &[
+            "home_time_outs_left_total",
+            "home_timeouts",
+            "HomeTimeOutsLeftTotal",
+        ],
+    );
+    copy_first(
+        out,
+        "GuestTimeOutsLeftTotal",
+        &[
+            "guest_time_outs_left_total",
+            "away_timeouts",
+            "GuestTimeOutsLeftTotal",
+        ],
+    );
+
+    payload
+}
+
+fn copy_first(out: &mut Map<String, Value>, target: &str, candidates: &[&str]) {
+    if out.get(target).is_some() {
+        return;
+    }
+
+    if let Some(v) = candidates.iter().find_map(|k| out.get(*k).cloned()) {
+        out.insert(target.to_string(), v);
     }
 }
 
@@ -499,14 +562,14 @@ async function refresh() {{
     const data = await res.json();
     const row = Array.isArray(data) ? (data[0] || {{}}) : {{}};
 
-    document.getElementById('home_team').textContent = choose(row, ['home_team']);
-    document.getElementById('away_team').textContent = choose(row, ['away_team']);
-    document.getElementById('home_score').textContent = choose(row, ['home_score']);
-    document.getElementById('away_score').textContent = choose(row, ['away_score']);
-    document.getElementById('period').textContent = choose(row, ['period', 'quarter']);
-    document.getElementById('clock').textContent = choose(row, ['clock', 'main_clock_time'], '--:--');
-    document.getElementById('home_timeouts').textContent = choose(row, ['home_timeouts', 'home_time_outs_left_total']);
-    document.getElementById('away_timeouts').textContent = choose(row, ['away_timeouts', 'guest_time_outs_left_total']);
+    document.getElementById('home_team').textContent = choose(row, ['HomeTeamName', 'home_team']);
+    document.getElementById('away_team').textContent = choose(row, ['GuestTeamName', 'away_team']);
+    document.getElementById('home_score').textContent = choose(row, ['HomeTeamScore', 'home_score']);
+    document.getElementById('away_score').textContent = choose(row, ['GuestTeamScore', 'away_score']);
+    document.getElementById('period').textContent = choose(row, ['Period', 'period', 'quarter']);
+    document.getElementById('clock').textContent = choose(row, ['MainClockTime', 'clock', 'main_clock_time'], '--:--');
+    document.getElementById('home_timeouts').textContent = choose(row, ['HomeTimeOutsLeftTotal', 'home_timeouts', 'home_time_outs_left_total']);
+    document.getElementById('away_timeouts').textContent = choose(row, ['GuestTimeOutsLeftTotal', 'away_timeouts', 'guest_time_outs_left_total']);
     document.getElementById('detail_1').textContent = choose(row, ['possession', 'inning']);
     document.getElementById('detail_2').textContent = choose(row, ['balls', 'downs']);
     document.getElementById('detail_3').textContent = choose(row, ['strikes', 'yards_to_go']);

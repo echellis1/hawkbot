@@ -7,6 +7,7 @@ use std::{
 };
 
 use serde::Deserialize;
+use uuid::Uuid;
 use serde_json::Value;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -797,19 +798,7 @@ fn parse_sport(s: &str) -> Option<ActiveSport> {
 }
 
 fn new_public_id() -> String {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
-    let hex = format!("{nanos:032x}");
-    format!(
-        "{}-{}-{}-{}-{}",
-        &hex[0..8],
-        &hex[8..12],
-        &hex[12..16],
-        &hex[16..20],
-        &hex[20..32]
-    )
+    Uuid::new_v4().to_string()
 }
 
 fn http_ok(content_type: &str, body: &str) -> String {

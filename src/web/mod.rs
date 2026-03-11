@@ -2,7 +2,7 @@ use std::{
     io,
     path::PathBuf,
     sync::Arc,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime},
 };
 
 use serde::Deserialize;

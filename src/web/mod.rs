@@ -142,13 +142,7 @@ async fn poll_loop(state: WebState) {
 }
 
 fn now_ts() -> String {
-    format!(
-        "{}",
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs()
-    )
+    format!("{:?}", SystemTime::now())
 }
 
 enum DaktronicsParser {

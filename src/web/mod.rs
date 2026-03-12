@@ -1,4 +1,5 @@
 use std::{
+    collections::{BTreeMap, HashSet},
     io,
     path::PathBuf,
     sync::Arc,
@@ -50,6 +51,7 @@ impl Default for RuntimeStatus {
 pub struct WebState {
     config: Arc<RwLock<AppConfig>>,
     runtime: Arc<RwLock<RuntimeStatus>>,
+    sessions: Arc<RwLock<HashSet<String>>>,
     config_path: PathBuf,
 }
 
@@ -58,6 +60,7 @@ pub async fn run(config: AppConfig, config_path: PathBuf) -> io::Result<()> {
     let state = WebState {
         config: Arc::new(RwLock::new(config)),
         runtime: Arc::new(RwLock::new(RuntimeStatus::default())),
+        sessions: Arc::new(RwLock::new(HashSet::new())),
         config_path,
     };
 
@@ -601,7 +604,7 @@ async fn handle_connection(mut stream: TcpStream, state: WebState) -> io::Result
 }
 
 async fn route(method: &str, target: &str, req: &str, state: WebState) -> String {
-    let (path, query) = target.split_once('?').unwrap_or((target, ""));
+    let (path, _) = target.split_once('?').unwrap_or((target, ""));
 
     if method == "GET" && path == "/" {
         let cfg = state.config.read().await.clone();
@@ -629,18 +632,21 @@ async fn route(method: &str, target: &str, req: &str, state: WebState) -> String
     }
 
     if path.starts_with("/admin") {
-        if method == "GET" && path == "/admin" && query_token(query).is_none() {
+        if method == "GET" && path == "/admin" && !has_valid_session(req, &state).await {
             return http_ok("text/html", admin_login_html());
         }
 
-        if !authorized(query, &state).await {
+        if method == "POST" && path == "/admin/login" {
+            return login(req, &state).await;
+        }
+
+        if !authorized(req, &state).await {
             return http_unauthorized();
         }
     }
 
     if method == "GET" && path == "/admin" {
-        let token = query_token(query).unwrap_or_default();
-        let body = admin_html(token);
+        let body = admin_html();
         return http_ok("text/html", &body);
     }
 
@@ -683,17 +689,47 @@ async fn route(method: &str, target: &str, req: &str, state: WebState) -> String
     http_not_found()
 }
 
-async fn authorized(query: &str, state: &WebState) -> bool {
-    let token = query_token(query).unwrap_or("");
-    let cfg = state.config.read().await;
-    token == cfg.admin_password_hash
+async fn authorized(req: &str, state: &WebState) -> bool {
+    has_valid_session(req, state).await
 }
 
-fn query_token(query: &str) -> Option<&str> {
-    query
-        .split('&')
-        .filter_map(|x| x.split_once('='))
-        .find_map(|(k, v)| (k == "token").then_some(v))
+async fn has_valid_session(req: &str, state: &WebState) -> bool {
+    let Some(session_id) = cookie_value(req, "admin_session") else {
+        return false;
+    };
+    state.sessions.read().await.contains(session_id)
+}
+
+async fn login(req: &str, state: &WebState) -> String {
+    let body_text = req.split("\r\n\r\n").nth(1).unwrap_or("");
+    let form = parse_form(body_text);
+    let token = form.get("token").map(String::as_str).unwrap_or("");
+    let cfg = state.config.read().await;
+    if token != cfg.admin_password_hash {
+        return http_unauthorized();
+    }
+    drop(cfg);
+
+    let session_id = Uuid::new_v4().to_string();
+    state.sessions.write().await.insert(session_id.clone());
+    http_see_other_with_cookie(
+        "/admin",
+        &format!(
+            "admin_session={session_id}; Path=/admin; HttpOnly; SameSite=Lax"
+        ),
+    )
+}
+
+fn cookie_value<'a>(req: &'a str, name: &str) -> Option<&'a str> {
+    req.lines()
+        .find_map(|line| line.strip_prefix("Cookie: "))
+        .and_then(|cookies| {
+            cookies
+                .split(';')
+                .map(str::trim)
+                .filter_map(|pair| pair.split_once('='))
+                .find_map(|(k, v)| (k == name).then_some(v))
+        })
 }
 
 fn admin_login_html() -> &'static str {
@@ -759,7 +795,7 @@ input {
   <main class='card'>
     <h1>Daktronics Gateway Admin</h1>
     <p>Enter your admin token to open configuration controls.</p>
-    <form method='get' action='/admin'>
+    <form method='post' action='/admin/login'>
       <label for='token'>Admin Token</label>
       <input id='token' type='password' name='token' placeholder='••••••••' required />
       <div class='row'>
@@ -772,7 +808,7 @@ input {
 </html>"#
 }
 
-fn admin_html(token: &str) -> String {
+fn admin_html() -> String {
     let template = r#"<!doctype html>
 <html>
 <head>
@@ -867,7 +903,7 @@ button.btn { font-size: 28px; }
       </div>
       <div class='btns'>
         <a class='btn' href='/'>Open Dashboard</a>
-        <a class='btn' href='/admin/config?token=__TOKEN__'>View Status JSON</a>
+        <a class='btn' href='/admin/config'>View Status JSON</a>
       </div>
     </section>
 
@@ -882,7 +918,7 @@ button.btn { font-size: 28px; }
       <article class='card'>
         <h2>Sport/controller settings</h2>
         <p class='desc'>Select decoder profile and active sport family.</p>
-        <form method='post' action='/admin/controller?token=__TOKEN__'>
+        <form method='post' action='/admin/controller'>
           <label for='controller_type'>Controller Type</label>
           <select id='controller_type' name='controller_type'>
             <option value='daktronics' selected>all_sport_5000</option>
@@ -891,7 +927,7 @@ button.btn { font-size: 28px; }
             <button class='btn' type='submit'>Apply Controller</button>
           </div>
         </form>
-        <form method='post' action='/admin/sport?token=__TOKEN__'>
+        <form method='post' action='/admin/sport'>
           <label for='active_sport'>Sport Type</label>
           <select id='active_sport' name='active_sport'>
             <option value='baseball'>baseball</option>
@@ -914,7 +950,7 @@ button.btn { font-size: 28px; }
         <label>Public Status Endpoint</label>
         <input value='/status/&lt;uuid&gt;.json' readonly />
         <div class='actions'>
-          <form method='post' action='/admin/rotate?token=__TOKEN__'>
+          <form method='post' action='/admin/rotate'>
             <button class='btn' type='submit'>Rotate Public URL</button>
           </form>
         </div>
@@ -924,7 +960,7 @@ button.btn { font-size: 28px; }
         <h2>Save configuration</h2>
         <p class='desc'>Apply changes to active runtime configuration.</p>
         <div class='actions'>
-          <form method='post' action='/admin/controller?token=__TOKEN__'>
+          <form method='post' action='/admin/controller'>
             <input type='hidden' name='controller_type' value='daktronics' />
             <button class='btn' type='submit'>Save</button>
           </form>
@@ -935,10 +971,10 @@ button.btn { font-size: 28px; }
 </body>
 </html>"#;
 
-    template.replace("__TOKEN__", token)
+    template.to_string()
 }
 
-fn parse_form(body: &str) -> std::collections::BTreeMap<String, String> {
+fn parse_form(body: &str) -> BTreeMap<String, String> {
     body.split('&')
         .filter_map(|pair| pair.split_once('='))
         .map(|(k, v)| (k.to_string(), v.replace('+', " ")))
@@ -979,6 +1015,12 @@ fn http_bad_request() -> String {
 }
 fn http_unauthorized() -> String {
     "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\n\r\n".into()
+}
+
+fn http_see_other_with_cookie(location: &str, cookie: &str) -> String {
+    format!(
+        "HTTP/1.1 303 See Other\r\nLocation: {location}\r\nSet-Cookie: {cookie}\r\nContent-Length: 0\r\n\r\n"
+    )
 }
 
 #[derive(Deserialize)]

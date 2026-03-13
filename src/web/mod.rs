@@ -889,7 +889,6 @@ input, select {
   background: #0c1f46;
   color: #eaf2ff;
   padding: 10px 12px;
-  font-size: 28px;
 }
 .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
 button.btn { font-size: 28px; }

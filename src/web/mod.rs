@@ -414,26 +414,26 @@ fn dashboard_html(public_uuid: &str) -> String {
 <title>Daktronics Gateway Dashboard</title>
 <style>
 :root {{
-  --bg: #081d4c;
-  --panel: #142b5a;
-  --panel-border: #3a5586;
-  --tile: #041a46;
-  --text: #eaf1ff;
-  --muted: #8ab2f7;
+  --bg: #081a3d;
+  --panel: linear-gradient(180deg, #1b3567 0%, #182f5e 100%);
+  --tile: linear-gradient(180deg, #1a3366 0%, #182f5c 100%);
+  --border: #3b67a8;
+  --text: #deebff;
+  --muted: #9fb8df;
 }}
 * {{ box-sizing: border-box; }}
 body {{
   margin: 0;
   font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-  background: linear-gradient(180deg, #07205a, #081f50);
+  background: radial-gradient(circle at top left, #13366f 0%, #081a3d 52%, #061632 100%);
   color: var(--text);
   padding: 24px;
 }}
 .shell {{ max-width: 1120px; margin: 0 auto; }}
 .header {{
-  border: 1px solid var(--panel-border);
+  border: 1px solid var(--border);
   border-radius: 16px;
-  background: rgba(24, 44, 90, 0.95);
+  background: var(--panel);
   padding: 16px;
   display: flex;
   justify-content: space-between;
@@ -444,20 +444,20 @@ body {{
 .title p {{ margin: 8px 0 0; color: var(--muted); font-size: 28px; }}
 .btns {{ display: flex; gap: 12px; flex-wrap: wrap; }}
 .btn {{
-  border: 1px solid #4c80cf;
+  border: 1px solid #4c7ec3;
   border-radius: 12px;
-  color: #eef4ff;
+  color: #e8f1ff;
   text-decoration: none;
   padding: 10px 16px;
   font-size: 22px;
   font-weight: 600;
-  background: #1d4f95;
+  background: linear-gradient(180deg, #2f62ab 0%, #2a5796 100%);
 }}
 .board {{
   margin-top: 20px;
-  border: 1px solid var(--panel-border);
+  border: 1px solid var(--border);
   border-radius: 16px;
-  background: var(--panel);
+  background: linear-gradient(180deg, #193263 0%, #172d59 100%);
   padding: 16px;
 }}
 .score-grid {{
@@ -467,12 +467,12 @@ body {{
 }}
 .card {{
   background: var(--tile);
-  border: 1px solid #395789;
+  border: 1px solid var(--border);
   border-radius: 14px;
   padding: 16px;
   min-height: 170px;
 }}
-.label {{ text-transform: uppercase; letter-spacing: 0.08em; color: #8ab2f7; font-size: 20px; }}
+.label {{ text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-size: 20px; }}
 .name {{ font-size: 54px; font-weight: 700; margin-top: 8px; }}
 .score {{ font-size: 80px; margin-top: 14px; line-height: 1; font-weight: 700; }}
 .middle {{ text-align: center; display: flex; flex-direction: column; justify-content: center; }}
@@ -482,19 +482,19 @@ body {{
   display: grid;
   grid-template-columns: repeat(6, 1fr);
   gap: 10px;
-  border: 1px solid #395789;
+  border: 1px solid var(--border);
   border-radius: 14px;
   padding: 10px;
-  background: rgba(7, 29, 74, 0.8);
+  background: #112b58;
 }}
 .detail {{
-  border: 1px solid #395789;
+  border: 1px solid var(--border);
   border-radius: 12px;
-  background: #061c49;
+  background: #0c1f46;
   min-height: 100px;
   padding: 10px;
 }}
-.detail .k {{ text-transform: uppercase; color: #8ab2f7; font-size: 18px; letter-spacing: 0.06em; }}
+.detail .k {{ text-transform: uppercase; color: var(--muted); font-size: 18px; letter-spacing: 0.06em; }}
 .detail .v {{ font-size: 46px; margin-top: 6px; font-weight: 700; }}
 @media (max-width: 980px) {{
   .title h1 {{ font-size: 30px; }}

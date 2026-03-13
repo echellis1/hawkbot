@@ -425,9 +425,13 @@ fn dashboard_html(public_uuid: &str) -> String {
 body {{
   margin: 0;
   font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-  background: radial-gradient(circle at top left, #13366f 0%, #081a3d 52%, #061632 100%);
+  background-color: #061632;
+  background-image: radial-gradient(circle at top left, #13366f 0%, #081a3d 52%, #061632 100%);
+  background-repeat: no-repeat;
+  background-size: cover;
   color: var(--text);
   padding: 24px;
+  min-height: 100vh;
 }}
 .shell {{ max-width: 1120px; margin: 0 auto; }}
 .header {{
@@ -753,7 +757,10 @@ body {
   margin: 0;
   font-family: Inter, Segoe UI, Roboto, Arial, sans-serif;
   color: var(--text);
-  background: radial-gradient(circle at top left, #13366f 0%, #081a3d 52%, #061632 100%);
+  background-color: #061632;
+  background-image: radial-gradient(circle at top left, #13366f 0%, #081a3d 52%, #061632 100%);
+  background-repeat: no-repeat;
+  background-size: cover;
   min-height: 100vh;
   display: grid;
   place-items: center;
@@ -829,7 +836,11 @@ body {
   margin: 0;
   font-family: Inter, Segoe UI, Roboto, Arial, sans-serif;
   color: var(--text);
-  background: radial-gradient(circle at top left, #13366f 0%, #081a3d 52%, #061632 100%);
+  background-color: #061632;
+  background-image: radial-gradient(circle at top left, #13366f 0%, #081a3d 52%, #061632 100%);
+  background-repeat: no-repeat;
+  background-size: cover;
+  min-height: 100vh;
 }
 .shell { max-width: 1160px; margin: 10px auto; padding: 0 8px 12px; }
 .header {

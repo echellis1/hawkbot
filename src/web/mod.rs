@@ -879,8 +879,8 @@ body {
   padding: 16px;
   min-height: 300px;
 }
-.card h2 { margin: 0; font-size: 36px; }
-.desc { margin: 10px 0 16px; color: var(--muted); font-size: 26px; min-height: 64px; }
+.card h2 { margin: 0; }
+.desc { margin: 10px 0 16px; color: var(--muted); min-height: 64px; }
 label { display: block; margin: 12px 0 6px; color: var(--muted); font-size: 25px; font-weight: 600; }
 input, select {
   width: 100%;

@@ -841,33 +841,35 @@ body {
   background-repeat: no-repeat;
   background-size: cover;
   min-height: 100vh;
+  padding: 24px;
 }
-.shell { max-width: 1160px; margin: 10px auto; padding: 0 8px 12px; }
+.shell { max-width: 1120px; margin: 0 auto; }
 .header {
-  background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 16px;
-  padding: 14px;
+  background: var(--panel);
+  padding: 16px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
 }
-.title h1 { margin: 0; font-size: 38px; }
-.title p { margin: 6px 0 0; color: var(--muted); font-size: 28px; }
-.btns { display: flex; gap: 10px; flex-wrap: wrap; }
+.title h1 { margin: 0; font-size: 39px; line-height: 1.1; }
+.title p { margin: 8px 0 0; color: var(--muted); font-size: 28px; }
+.btns { display: flex; gap: 12px; flex-wrap: wrap; }
 .btn {
   border: 1px solid #4c7ec3;
   background: linear-gradient(180deg, #2f62ab 0%, #2a5796 100%);
   color: #e8f1ff;
   border-radius: 12px;
-  padding: 10px 14px;
+  padding: 10px 16px;
   font-size: 22px;
+  font-weight: 600;
   text-decoration: none;
   cursor: pointer;
 }
 .grid {
-  margin-top: 14px;
+  margin-top: 20px;
   display: grid;
   grid-template-columns: repeat(4, minmax(210px, 1fr));
   gap: 12px;

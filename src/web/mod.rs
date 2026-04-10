@@ -19,6 +19,7 @@ use uuid::Uuid;
 use crate::{
     config::AppConfig,
     controllers::ActiveSport,
+    mqtt::MqttPublisher,
     rtd_state::data_source::serial_stream_data_source::SerialStreamDataSource,
     sports::{
         baseball::BaseballSport, basketball::BasketballSport, football::FootballSport,
@@ -53,19 +54,47 @@ pub struct WebState {
     runtime: Arc<RwLock<RuntimeStatus>>,
     sessions: Arc<RwLock<HashSet<String>>>,
     config_path: PathBuf,
+    mqtt: Option<Arc<MqttPublisher>>,
 }
 
 pub async fn run(config: AppConfig, config_path: PathBuf) -> io::Result<()> {
     let bind = config.web_bind.clone();
+
+    let mqtt = if config.mqtt_enabled {
+        match MqttPublisher::new(&config) {
+            Ok((publisher, event_loop, _rx)) => {
+                tokio::spawn(MqttPublisher::run_event_loop(
+                    event_loop,
+                    publisher.mqtt_connected_sender(),
+                ));
+                publisher.publish_online().await;
+                publisher.publish_config(&config).await;
+                Some(Arc::new(publisher))
+            }
+            Err(err) => {
+                eprintln!("MQTT init error: {err}");
+                None
+            }
+        }
+    } else {
+        None
+    };
+
     let state = WebState {
         config: Arc::new(RwLock::new(config)),
         runtime: Arc::new(RwLock::new(RuntimeStatus::default())),
         sessions: Arc::new(RwLock::new(HashSet::new())),
         config_path,
+        mqtt,
     };
 
     let poll_state = state.clone();
     tokio::spawn(async move { poll_loop(poll_state).await });
+
+    if state.mqtt.is_some() {
+        let mqtt_state = state.clone();
+        tokio::spawn(async move { mqtt_publish_loop(mqtt_state).await });
+    }
 
     let listener = TcpListener::bind(&bind).await?;
     loop {
@@ -74,6 +103,23 @@ pub async fn run(config: AppConfig, config_path: PathBuf) -> io::Result<()> {
         tokio::spawn(async move {
             let _ = handle_connection(stream, state).await;
         });
+    }
+}
+
+async fn mqtt_publish_loop(state: WebState) {
+    loop {
+        let interval_ms = state.config.read().await.publish_interval_ms.max(100);
+        tokio::time::sleep(Duration::from_millis(interval_ms)).await;
+
+        let Some(ref mqtt) = state.mqtt else {
+            return;
+        };
+        let cfg = state.config.read().await.clone();
+        let payload = state.runtime.read().await.latest_payload.clone();
+
+        if let Some(payload) = payload {
+            let _ = mqtt.publish_json(&cfg.mqtt_topic, &payload, cfg.mqtt_retain).await;
+        }
     }
 }
 

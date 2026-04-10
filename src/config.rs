@@ -15,6 +15,52 @@ pub struct AppConfig {
     pub admin_username: String,
     pub admin_password_hash: String,
     pub serial_device: String,
+
+    #[serde(default)]
+    pub mqtt_enabled: bool,
+    #[serde(default = "default_mqtt_host")]
+    pub mqtt_host: String,
+    #[serde(default = "default_mqtt_port")]
+    pub mqtt_port: u16,
+    #[serde(default = "default_mqtt_topic")]
+    pub mqtt_topic: String,
+    #[serde(default = "default_mqtt_retain")]
+    pub mqtt_retain: bool,
+    #[serde(default = "default_mqtt_client_id")]
+    pub mqtt_client_id: String,
+    #[serde(default)]
+    pub mqtt_username: Option<String>,
+    #[serde(default)]
+    pub mqtt_password: Option<String>,
+    #[serde(default)]
+    pub mqtt_use_tls: bool,
+    #[serde(default)]
+    pub mqtt_ca_file: Option<String>,
+    #[serde(default)]
+    pub mqtt_cert_file: Option<String>,
+    #[serde(default)]
+    pub mqtt_key_file: Option<String>,
+    #[serde(default = "default_publish_interval_ms")]
+    pub publish_interval_ms: u64,
+}
+
+fn default_mqtt_host() -> String {
+    "mqtt.scorenode.org".to_string()
+}
+fn default_mqtt_port() -> u16 {
+    1883
+}
+fn default_mqtt_topic() -> String {
+    "scoreboard/status".to_string()
+}
+fn default_mqtt_retain() -> bool {
+    true
+}
+fn default_mqtt_client_id() -> String {
+    "hawkbot".to_string()
+}
+fn default_publish_interval_ms() -> u64 {
+    100
 }
 
 impl Default for AppConfig {
@@ -28,6 +74,19 @@ impl Default for AppConfig {
             admin_username: "admin".to_string(),
             admin_password_hash: "admin".to_string(),
             serial_device: default_serial_device(),
+            mqtt_enabled: false,
+            mqtt_host: default_mqtt_host(),
+            mqtt_port: default_mqtt_port(),
+            mqtt_topic: default_mqtt_topic(),
+            mqtt_retain: default_mqtt_retain(),
+            mqtt_client_id: default_mqtt_client_id(),
+            mqtt_username: None,
+            mqtt_password: None,
+            mqtt_use_tls: false,
+            mqtt_ca_file: None,
+            mqtt_cert_file: None,
+            mqtt_key_file: None,
+            publish_interval_ms: default_publish_interval_ms(),
         }
     }
 }

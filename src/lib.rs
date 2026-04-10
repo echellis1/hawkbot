@@ -22,6 +22,7 @@ pub mod controllers;
 pub mod packet;
 pub mod rtd_state;
 pub mod sports;
+pub mod mqtt;
 pub mod web;
 
 pub use rtd_state::{RTDFieldJustification, RTDState, RTDStateError, RTDStateFieldError};
